@@ -1,0 +1,19 @@
+# Linux daemon-load smoke: build logoscore, install our Linux RLN-enabled .lgx,
+# load it in the daemon and drive start/peerInfo/stop. Runs as CMD so
+# `docker run` executes the smoke.
+FROM nixos/nix:2.34.1
+
+RUN printf 'experimental-features = nix-command flakes\nsandbox = false\n' >> /etc/nix/nix.conf
+RUN git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+# logoscore CLI (the -D / load-module / call daemon binary the sim + host use).
+RUN nix build github:logos-co/logos-logoscore-cli -o /logoscore
+
+# Prefetch the runtime tools into the store (avoids a fetch on each run).
+RUN nix shell nixpkgs#bash nixpkgs#python3 nixpkgs#coreutils nixpkgs#gnutar nixpkgs#gnugrep nixpkgs#procps --command true
+
+COPY libp2p_module.lgx /smoke/libp2p_module.lgx
+COPY daemon_smoke.sh /smoke/daemon_smoke.sh
+RUN chmod +x /smoke/daemon_smoke.sh
+
+CMD ["sh", "-c", "nix shell nixpkgs#bash nixpkgs#python3 nixpkgs#coreutils nixpkgs#gnutar nixpkgs#gnugrep nixpkgs#procps --command bash /smoke/daemon_smoke.sh /smoke/libp2p_module.lgx"]

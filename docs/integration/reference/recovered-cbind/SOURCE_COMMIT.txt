@@ -1,0 +1,2 @@
+7e72c0d6df8dd9dbd2902915da332a109aaf7906 2026-05-07 chore: extract mix to logos-co/nim-libp2p-mix (#2378)
+220a07fd49531505d7191c96521a627280712e35 2026-05-06 feat(kad): add provider rejection and spillover (#2394)

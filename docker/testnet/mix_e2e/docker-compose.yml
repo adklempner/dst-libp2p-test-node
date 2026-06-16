@@ -1,0 +1,34 @@
+# 5-node RLN-over-mix E2E on the new universal logos-libp2p-module stack.
+# One logoscore daemon per container on a shared bridge network (each on
+# 0.0.0.0:9000, mutually reachable). Roles are driven post-up by orchestrate.sh:
+#   sender  -> wallet + rln + libp2p_module, registers RLN, generates proof, dials
+#   relay1-3, dest -> libp2p_module only, rlnEnable + mixSetNodeInfo (verify hops)
+# All services share one image (lp2p-testnet-e2e) + the freshly built .lgx,
+# mounted read-only and installed by entrypoint.sh.
+x-node: &node
+  # lp2p-mix-e2e is a snapshot (docker commit) of the working single-node `tn`
+  # container: it has flat, loadable wallet+rln modules plus their ffi nix-store
+  # deps (the raw lp2p-testnet-e2e image ships them broken — missing the absolute
+  # nix path in the wallet/rln .so NEEDED entry). The entrypoint overlays the
+  # freshly built libp2p_module .lgx (the one with LIBP2P_LISTEN_ADDRS support).
+  image: lp2p-mix-e2e
+  environment:
+    QT_QPA_PLATFORM: offscreen
+    LIBP2P_LISTEN_ADDRS: /ip4/0.0.0.0/tcp/9000
+    NSSA_WALLET_HOME_DIR: /testnet
+  volumes:
+    - ../../lp2p-out/libp2p_module.lgx:/artifacts/libp2p_module.lgx:ro
+    - ./entrypoint.sh:/entrypoint.sh:ro
+  entrypoint: ["bash", "/entrypoint.sh"]
+  networks: [mixnet]
+
+services:
+  relay1: { <<: *node }
+  relay2: { <<: *node }
+  relay3: { <<: *node }
+  dest:   { <<: *node }
+  sender: { <<: *node }
+
+networks:
+  mixnet:
+    driver: bridge

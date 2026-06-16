@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# Copyright (c) Status Research & Development GmbH
+
+import std/tables
+import chronos
+import results
+import ../libp2p
+import ../libp2p/protocols/protocol
+import ../libp2p/protocols/pubsub/gossipsub
+import ../libp2p/protocols/kademlia
+import ../libp2p/protocols/mix
+import ../libp2p/protocols/mix/mix_node
+import ../libp2p/protocols/connectivity/relay/client
+import ffi_types
+
+# TODO: remove and implement custom event callbacks if needed
+# Example:
+#   proc onSomeEvent(ctx: ptr LibP2PContext): Libp2pCallback =
+#    return proc(msg: string) {.gcsafe.} =
+#      callEventCallback(ctx, "onSomeEvent"):
+#        $JsonMyEvent.new(msg)
+type AppCallbacks* = ref object
+
+type PubsubTopicPair* = tuple[topic: string, handler: PubsubTopicHandler]
+type TopicHandlerEntry* = tuple[handler: TopicHandler, userData: pointer]
+
+type LibP2P* = ref object
+  switch*: Switch
+  rng*: ref HmacDrbgContext
+  gossipSub*: Opt[GossipSub]
+  kad*: Opt[KadDHT]
+  mix*: Opt[MixProtocol]
+  mixNodeInfo*: Opt[MixNodeInfo]
+  relayClient*: Opt[RelayClient]
+  topicHandlers*: Table[PubsubTopicPair, TopicHandlerEntry]
+  connections*: Table[ptr Libp2pStream, Connection]
+  streamReleaseWaiters*: Table[ptr Libp2pStream, Future[void].Raising([CancelledError])]
+  customProtocols*: Table[string, LPProtocol]
