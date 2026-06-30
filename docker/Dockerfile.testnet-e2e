@@ -34,13 +34,10 @@ ENV LIBCLANG_PATH=/usr/lib/llvm-18/lib
 RUN source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
     nix build --no-accept-flake-config --fallback github:logos-co/logos-logoscore-cli -o /logoscore
 
-# wallet + rln modules as .lgx bundles via nix-bundle-lgx, mirroring logos-chat's
-# proven sim recipe (run_simulation_lgx.sh lgx_from). wallet-module overrides its
-# inputs to the LOCAL submodules: logos-execution-zone-module (its
-# send_public_transaction Q_INVOKABLE now shims rc6's native program_id-based
-# wallet_ffi_send_generic_public_transaction, which register_member's tx-submit
-# needs) and lssa (upstream rc6). nix build emits raw lib/include; the daemon
-# needs the .lgx layout (manifest + variants/<plat>/*.so).
+# Clone logos-lez-rln for the RLN module build (lez-rln-ffi + rln-module are
+# overlaid from docker/vendor below). The WALLET module no longer comes from
+# here — it is built straight from upstream's flake (see the wallet step). nix
+# emits raw lib/include; the daemon needs the .lgx layout (manifest + variant).
 RUN source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
     git clone -b feat/rln-stateless-v2.0.2 https://github.com/logos-co/logos-lez-rln.git /root/logos-lez-rln && \
     cd /root/logos-lez-rln && git submodule update --init && \
@@ -51,19 +48,17 @@ RUN source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
 # generic transactions. Vendored, not pushed — see docker/vendor/lssa.
 COPY docker/vendor/lssa/ /root/logos-lez-rln/lssa/
 
-# C++ wallet module adapted to rc6 wallet-ffi: send_public_transaction shims
-# wallet_ffi_send_generic_public_transaction; create_new handles rc6's
-# FfiCreateWalletOutput return; transfer_* carry the rc5+ signature params.
-COPY docker/vendor/logos-execution-zone-module/ /root/logos-lez-rln/logos-execution-zone-module/
-
-# Wallet bundle FIRST (inputs stable) so rln-side iterations keep it cached.
+# Wallet module: UPSTREAM logos-execution-zone-module d70225c (rc6) — BOTH the
+# Rust wallet-ffi fork and our C++ module fork are DROPPED. Upstream natively
+# ships program-id-based send_generic_public_transaction (+ rc6 transfer sigs +
+# resolve_public_account); its flake pins execution-zone e37876a6 (rc6), so no
+# override is needed. The rln module calls send_generic_public_transaction
+# directly with typed multi-arg invokeRemoteMethod (dispatch confirmed).
+# Built FIRST (stable input) so rln-side iterations keep it cached.
 RUN source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
-    cd /root/logos-lez-rln && \
-    nix bundle --no-accept-flake-config --fallback \
-        --bundler github:logos-co/nix-bundle-lgx .#wallet-module \
-        --override-input logos-wallet-module "path:/root/logos-lez-rln/logos-execution-zone-module" \
-        --override-input logos-wallet-module/logos-execution-zone "path:/root/logos-lez-rln/lssa" \
-        -o /root/wallet-bundle
+    nix build --no-accept-flake-config --fallback \
+        github:logos-blockchain/logos-execution-zone-module/d70225ced646934d2294fd9e8f8b03615c104b80#lgx \
+        -o /root/wallet-lgx
 
 # Patched rln module (RLNDIAG traces) + the lez-rln-ffi PDA-prefix fix: rc5 renamed
 # the public-PDA prefix /NSSA/v0.2/AccountId/PDA/ -> /LEE/v0.2/AccountId/PDA/, so the
@@ -99,7 +94,7 @@ COPY docker/testnet/fixtures-rc6/ /testnet/
 # COPY'd artifact. Variant key auto-detected (single per-platform variant).
 RUN mkdir -p /modules && \
     rlnlgx=$(find -L /root/rln-bundle -maxdepth 2 -name '*.lgx' | head -1) && \
-    walletlgx=$(find -L /root/wallet-bundle -maxdepth 2 -name '*.lgx' | head -1) && \
+    walletlgx=$(find -L /root/wallet-lgx -maxdepth 2 -name '*.lgx' | head -1) && \
     [ -f "$rlnlgx" ] && [ -f "$walletlgx" ] || { echo "missing .lgx (rln=$rlnlgx wallet=$walletlgx)"; exit 1; } && \
     for lgx in /artifacts/libp2p_module.lgx "$rlnlgx" "$walletlgx"; do \
         name=$(tar xzOf "$lgx" manifest.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["name"])') && \
