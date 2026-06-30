@@ -28,7 +28,7 @@ WALLET_HOME="${WALLET_HOME:-/testnet}"
 RPC_URL="${RPC_URL:-https://testnet.lez.logos.co/}"
 RATE="${RATE:-100}"
 SYNC_STEP="${SYNC_STEP:-3000}"
-WALLET_MOD="liblogos_execution_zone_wallet_module"
+WALLET_MOD="logos_execution_zone"
 RLN_MOD="liblogos_rln_module"
 LP2P_MOD="libp2p_module"
 

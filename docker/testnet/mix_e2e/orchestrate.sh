@@ -49,7 +49,7 @@ ALL="relay1 relay2 relay3 dest sender"
 RPC_URL="${RPC_URL:-https://testnet.lez.logos.co/}"
 RATE="${RATE:-100}"
 SYNC_STEP="${SYNC_STEP:-3000}"
-WALLET_MOD="liblogos_execution_zone_wallet_module"
+WALLET_MOD="logos_execution_zone"
 RLN_MOD="liblogos_rln_module"
 
 sv(){ eval "_${1}_${2}=\"\$3\""; }
@@ -121,8 +121,14 @@ EOF
 # without rebuilding the image; CONFIG_ACCT to target a different tree.
 CONFIG_ACCT="${CONFIG_ACCT:-}"; HOLDING_ACCT="${HOLDING_ACCT:-}"
 
-echo "=== up: 5 daemons ==="
-$DC up -d
+echo "=== up: 5 daemons (force-recreate for FRESH daemons) ==="
+# Force-recreate so each run starts from clean daemons. Module state (e.g. the
+# RLN SpamProtection factory registered by rlnEnable) is a process-global that
+# lives as long as the daemon process; without --force-recreate, compose may
+# reuse a daemon and leak PHASE-2 RLN state into a later PHASE-1 run (a stale
+# "spam protection mounted but not ready" then drops every mix send).
+$DC down --remove-orphans >/dev/null 2>&1
+$DC up -d --force-recreate
 for s in $ALL; do
   for i in $(seq 1 90); do lc "$s" load-module libp2p_module >/dev/null 2>&1 && break; sleep 1; done
 done

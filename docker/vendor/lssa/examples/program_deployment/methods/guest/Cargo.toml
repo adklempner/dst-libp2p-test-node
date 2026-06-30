@@ -1,0 +1,15 @@
+[package]
+name = "example_program_deployment_programs"
+version = "0.1.0"
+edition = "2024"
+license = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+lee_core.workspace = true
+
+hex.workspace = true
+bytemuck.workspace = true
+risc0-zkvm.workspace = true

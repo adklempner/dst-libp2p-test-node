@@ -1,0 +1,41 @@
+[package]
+name = "lee"
+version = "0.1.0"
+edition = "2024"
+license = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+lee_core = { workspace = true, features = ["host"] }
+
+anyhow.workspace = true
+thiserror.workspace = true
+risc0-zkvm = { workspace = true, features = ["client"] }
+serde.workspace = true
+serde_with.workspace = true
+sha2.workspace = true
+rand.workspace = true
+borsh.workspace = true
+hex.workspace = true
+k256.workspace = true
+risc0-binfmt = "3.0.2"
+log.workspace = true
+
+[build-dependencies]
+build_utils.workspace = true
+
+[dev-dependencies]
+lee_core = { workspace = true, features = ["test_utils"] }
+token_core.workspace = true
+test_methods = { path = "test_methods" }
+
+env_logger.workspace = true
+hex-literal = "1.0.0"
+test-case = "3.3.1"
+
+[features]
+default = []
+prove = ["risc0-zkvm/prove"]
+test-utils = []

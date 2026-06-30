@@ -1,0 +1,342 @@
+[workspace.package]
+license = "MIT or Apache-2.0"
+
+[workspace]
+resolver = "3"
+members = [
+  "integration_tests",
+
+  "lez/storage",
+  "lee/key_protocol",
+  "lee/state_machine",
+  "lee/state_machine/core",
+  "lee/privacy_preserving_circuit",
+  "lee/state_machine/test_methods",
+  "lee/state_machine/test_methods/guest",
+
+  "lez",
+  "lez/system_accounts",
+  "lez/sequencer/core",
+  "lez/sequencer/service",
+  "lez/sequencer/service/protocol",
+  "lez/sequencer/service/rpc",
+  "lez/indexer/core",
+  "lez/indexer/service",
+  "lez/indexer/service/protocol",
+  "lez/indexer/service/rpc",
+  "lez/explorer_service",
+  "lez/testnet_initial_state",
+  "lez/indexer/ffi",
+  "lez/keycard_wallet",
+  "lez/mempool",
+  "lez/wallet",
+  "lez/wallet-ffi",
+  "lez/common",
+  "lez/programs",
+  "lez/programs/amm",
+  "lez/programs/associated_token_account",
+  "lez/programs/authenticated_transfer",
+  "lez/programs/bridge",
+  "lez/programs/clock",
+  "lez/programs/faucet",
+  "lez/programs/pinata",
+  "lez/programs/pinata_token",
+  "lez/programs/token",
+  "lez/programs/vault",
+
+  "test_programs",
+  "test_programs/guest",
+
+  "examples/program_deployment",
+  "examples/program_deployment/methods",
+  "examples/program_deployment/methods/guest",
+
+  "build_utils",
+
+  "test_fixtures",
+
+  "tools/cycle_bench",
+  "tools/crypto_primitives_bench",
+  "tools/integration_bench",
+]
+
+[workspace.dependencies]
+lee = { path = "lee/state_machine" }
+lee_core = { path = "lee/state_machine/core" }
+common = { path = "lez/common" }
+mempool = { path = "lez/mempool" }
+storage = { path = "lez/storage" }
+key_protocol = { path = "lee/key_protocol" }
+sequencer_core = { path = "lez/sequencer/core" }
+sequencer_service_protocol = { path = "lez/sequencer/service/protocol" }
+sequencer_service_rpc = { path = "lez/sequencer/service/rpc" }
+sequencer_service = { path = "lez/sequencer/service" }
+indexer_core = { path = "lez/indexer/core" }
+indexer_service = { path = "lez/indexer/service" }
+indexer_service_protocol = { path = "lez/indexer/service/protocol" }
+indexer_service_rpc = { path = "lez/indexer/service/rpc" }
+wallet = { path = "lez/wallet" }
+wallet-ffi = { path = "lez/wallet-ffi", default-features = false }
+indexer_ffi = { path = "lez/indexer/ffi" }
+lez = { path = "lez" }
+programs = { path = "lez/programs", default-features = false, features = [
+  "artifacts",
+] }
+system_accounts = { path = "lez/system_accounts" }
+clock_core = { path = "lez/programs/clock/core" }
+token_core = { path = "lez/programs/token/core" }
+token_program = { path = "lez/programs/token" }
+amm_core = { path = "lez/programs/amm/core" }
+amm_program = { path = "lez/programs/amm" }
+associated_token_account_core = { path = "lez/programs/associated_token_account/core" }
+ata_program = { path = "lez/programs/associated_token_account" }
+authenticated_transfer_core = { path = "lez/programs/authenticated_transfer/core" }
+faucet_core = { path = "lez/programs/faucet/core" }
+bridge_core = { path = "lez/programs/bridge/core" }
+vault_core = { path = "lez/programs/vault/core" }
+build_utils = { path = "build_utils" }
+test_programs = { path = "test_programs" }
+testnet_initial_state = { path = "lez/testnet_initial_state" }
+keycard_wallet = { path = "lez/keycard_wallet" }
+test_fixtures = { path = "test_fixtures" }
+
+tokio = { version = "1.50", features = [
+  "net",
+  "rt-multi-thread",
+  "sync",
+  "fs",
+] }
+tokio-util = "0.7.18"
+risc0-zkvm = { version = "3.0.5", default-features = false, features = ['std'] }
+risc0-build = "3.0.5"
+anyhow = "1.0.98"
+derive_more = "2.1.1"
+num_cpus = "1.13.1"
+openssl = { version = "0.10", features = ["vendored"] }
+openssl-probe = { version = "0.1.2" }
+serde = { version = "1.0.60", default-features = false, features = ["derive"] }
+serde_json = "1.0.81"
+serde_with = "3.16.1"
+actix = "0.13.0"
+actix-cors = "0.7.1"
+jsonrpsee = "0.26.0"
+futures = "0.3"
+actix-rt = "*"
+lazy_static = "1.5.0"
+env_logger = "0.11"
+log = "0.4.28"
+lru = "0.16.3"
+thiserror = "2.0"
+sha2 = "0.10.8"
+hex = "0.4.3"
+bytemuck = "1.24.0"
+bytesize = { version = "2.3.1", features = ["serde"] }
+humantime-serde = "1.1"
+arc-swap = "1.7"
+humantime = "2.1"
+aes-gcm = "0.10.3"
+toml = "0.9.8"
+bincode = "1.3.3"
+tempfile = "3.14.0"
+light-poseidon = "0.3.0"
+ark-bn254 = "0.5.0"
+ark-ff = "0.5.0"
+tiny-keccak = { version = "2.0.2", features = ["keccak"] }
+base64 = "0.22.1"
+bip39 = "2.2.0"
+hmac-sha512 = "1.1.7"
+chrono = "0.4.41"
+borsh = "1.5.7"
+base58 = "0.2.0"
+itertools = "0.14.0"
+num-bigint = "0.4.6"
+url = { version = "2.5.4", features = ["serde"] }
+tokio-retry = "0.3.0"
+schemars = "1.2"
+async-stream = "0.3.6"
+
+logos-blockchain-common-http-client = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+logos-blockchain-key-management-system-service = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+logos-blockchain-core = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+logos-blockchain-chain-broadcast-service = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+logos-blockchain-chain-service = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+logos-blockchain-zone-sdk = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+logos-blockchain-http-api-common = { git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "d8711bbc3d43d3ef9755ef9b73af32fd0f703160" }
+
+rocksdb = { version = "0.24.0", default-features = false, features = [
+  "snappy",
+  "bindgen-runtime",
+] }
+rand = { version = "0.8.5", features = ["std", "std_rng", "getrandom"] }
+k256 = { version = "0.13.3", features = [
+  "ecdsa-core",
+  "arithmetic",
+  "expose-field",
+  "serde",
+  "pem",
+  "schnorr",
+] }
+ml-kem = { version = "0.3", features = ["hazmat"] }
+elliptic-curve = { version = "0.13.8", features = ["arithmetic"] }
+actix-web = { version = "4.13.0", default-features = false, features = [
+  "macros",
+] }
+clap = { version = "4.5.42", features = ["derive", "env"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+pyo3 = { version = "0.29", features = ["auto-initialize"] }
+zeroize = "1"
+criterion = { version = "0.8", features = ["html_reports"] }
+
+# Profile for leptos WASM release builds
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+
+# Keep backtraces but drop full DWARF type info to avoid LLD OOM/SIGBUS when
+# linking large integration-test binaries on resource-constrained CI runners.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
+
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints]
+clippy.all = { level = "deny", priority = -1 }
+
+# Pedantic
+clippy.pedantic = { level = "deny", priority = -1 }
+
+# Reason: documenting every function returning Result is too verbose and doesn't add much value when you have good error types.
+clippy.missing-errors-doc = "allow"
+# Reason: most of the panics are internal and not part of the public API, so documenting them is not necessary.
+clippy.missing-panics-doc = "allow"
+# Reason: this isn't always bad and actually works well for our financial and cryptography code.
+clippy.similar-names = "allow"
+# Reason: this lint is too strict and hard to fix.
+clippy.too-many-lines = "allow"
+# Reason: std hasher is fine for us in public functions.
+clippy.implicit-hasher = "allow"
+
+# Restriction
+clippy.restriction = { level = "deny", priority = -1 }
+
+# Reason: we deny the whole `restriction` group but we allow things that don't make sense for us.
+# That way we can still benefit from new lints added to the `restriction` group without having to
+# explicitly allow them.
+# As a downside our contributors don't know if some lint was enabled intentionally or just no one
+# else faced it before to allow it but we can handle this during code reviews.
+clippy.blanket-clippy-restriction-lints = "allow"
+# Reason: we can't avoid using unwrap for now.
+clippy.unwrap-used = "allow"
+# Reason: we can't avoid using expect for now.
+clippy.expect-used = "allow"
+# Reason: unreachable is good in many cases.
+clippy.unreachable = "allow"
+# Reason: this is ridiculous strict in our codebase and doesn't add any value.
+clippy.single-call-fn = "allow"
+# Reason: we use panic in some places and it's okay.
+clippy.panic = "allow"
+# Reason: shadowing is good most of the times.
+clippy.shadow-reuse = "allow"
+# Reason: implicit return is good.
+clippy.implicit-return = "allow"
+# Reason: std is fine for us, we don't need to use core.
+clippy.std-instead-of-core = "allow"
+# Reason: std is fine for us, we don't need to use alloc.
+clippy.std-instead-of-alloc = "allow"
+# Reason: default methods are good most of the time.
+clippy.missing-trait-methods = "allow"
+# Reason: this is too verbose and doesn't help much if you have rust analyzer.
+clippy.pattern-type-mismatch = "allow"
+# Reason: decreases readability.
+clippy.assertions-on-result-states = "allow"
+# Reason: documenting every assert is too verbose.
+clippy.missing-assert-message = "allow"
+# Reason: documenting private items is too verbose and doesn't add much value.
+clippy.missing-docs-in-private-items = "allow"
+# Reason: we use separated suffix style.
+clippy.separated_literal_suffix = "allow"
+# Reason: sometimes absolute paths are more readable.
+clippy.absolute-paths = "allow"
+# Reason: sometimes it's as readable as full variable naming.
+clippy.min-ident-chars = "allow"
+# Reason: it's very common and handy.
+clippy.indexing-slicing = "allow"
+# Reason: we use little endian style.
+clippy.little-endian-bytes = "allow"
+# Reason: we use this style of pub visibility.
+clippy.pub-with-shorthand = "allow"
+# Reason: question mark operator is very cool.
+clippy.question-mark-used = "allow"
+# Reason: it's fine to panic in tests and some functions where it makes sense.
+clippy.panic-in-result-fn = "allow"
+# Reason: we don't care that much about inlining and LTO should take care of it.
+clippy.missing_inline_in_public_items = "allow"
+# Reason: it's okay for us.
+clippy.default-numeric-fallback = "allow"
+# Reason: this is fine for us.
+clippy.exhaustive-enums = "allow"
+# Reason: this is fine for us.
+clippy.exhaustive-structs = "allow"
+# Reason: this helps readability when item is imported in other modules.
+clippy.module-name-repetitions = "allow"
+# Reason: mostly historical reasons, maybe we'll address this in future.
+clippy.mod-module-files = "allow"
+# Reason: named module files is our preferred way.
+clippy.self-named-module-files = "allow"
+# Reason: this is actually quite handy.
+clippy.impl-trait-in-params = "allow"
+# Reason: this is often useful.
+clippy.use-debug = "allow"
+# Reason: this is sometimes useful.
+clippy.field-scoped-visibility-modifiers = "allow"
+# Reason: `pub use` is good for re-exports and hiding unnecessary details.
+clippy.pub-use = "allow"
+# Reason: we prefer semicolons inside blocks.
+clippy.semicolon-outside-block = "allow"
+# Reason: we don't do it blindly, this is mostly internal constraints checks.
+clippy.unwrap-in-result = "allow"
+# Reason: we don't see any problems with that.
+clippy.shadow-same = "allow"
+# Reason: this lint is too verbose.
+clippy.let-underscore-untyped = "allow"
+# Reason: this lint is actually bad as it forces to use wildcard `..` instead of
+# field-by-field `_` which may lead to subtle bugs when new fields are added to the struct.
+clippy.unneeded-field-pattern = "allow"
+
+# Nursery
+clippy.nursery = { level = "deny", priority = -1 }
+
+# Reason: this is okay if it compiles.
+clippy.future-not-send = "allow"
+# Reason: this is actually a good lint, but currently it gives a lot of false-positives.
+clippy.significant-drop-tightening = "allow"
+
+# Correctness
+clippy.correctness = { level = "deny", priority = -1 }
+
+# Complexity
+clippy.complexity = { level = "deny", priority = -1 }
+
+# Perf
+clippy.perf = { level = "deny", priority = -1 }
+
+# Suspicious
+clippy.suspicious = { level = "deny", priority = -1 }
+
+# Style
+clippy.style = { level = "deny", priority = -1 }
+
+# Cargo
+clippy.cargo = { level = "deny", priority = -1 }
+
+# Reason: we're not at this stage yet and it will be a pain to create a new crate.
+clippy.cargo-common-metadata = "allow"
+# Reason: hard to address right now and mostly comes from dependencies
+# so the fix would be just a long list of exceptions.
+clippy.multiple-crate-versions = "allow"
