@@ -97,15 +97,15 @@ EOF
   elif echo "$logs" | grep -qiE "Would exceed max total rate limit|max_total_rate_limit"; then
     cat >&2 <<EOF
   CAUSE: the RLN rate-limit pool is exhausted (the tree is effectively full).
-  FIX: bump the tree and re-deploy (TREE_ID is a compiled-in constant, not env):
-    1. edit TREE_ID in $LEZ_RLN_DIR/lez-rln/src/rln/client.rs (new 32 bytes)
-    2. cd "$LEZ_RLN_DIR/lez-rln" && cargo build --bin run_setup --bin register_member
-    3. rm -f ../testnet/storage.json ../testnet/supply_holding.txt \\
-            ~/.logos-lez-rln/supply_holding_*.txt ~/.logos-lez-rln/payment_account_*.txt
-    4. source ../testnet/env.sh && cargo run --bin run_setup
-    5. refresh testnet/{config_account,payment_account,supply_holding}.txt + storage.json.seed
-    6. rebuild the image: docker build -f docker/Dockerfile.testnet-e2e -t lp2p-mix-e2e .
-  See REPRODUCE.md "Troubleshooting" for the full procedure.
+  FIX: provision a fresh deployment on a new tree (tree_id is the single knob),
+       then rebuild the image against it:
+    1. (cd "\$LEZ_RLN_DIR/lez-rln" && PYO3_PYTHON=\$(command -v python3) \\
+          cargo build --release --bin run_setup --bin derive_accounts)
+    2. LEZ_RLN_DIR="\$LEZ_RLN_DIR" bash ../provision.sh --name <new-name>
+    3. docker build -f docker/Dockerfile.testnet-e2e \\
+          --build-arg DEPLOYMENT=<new-name> -t lp2p-mix-e2e .
+  To reuse the same accounts across sims, add --adopt-wallet <storage.json> in (2).
+  See docker/testnet/deployments/README.md for the full flow.
 EOF
   else
     cat >&2 <<EOF
