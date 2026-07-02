@@ -7,9 +7,9 @@
 #   bash docker/testnet/mix_e2e/bootstrap.sh
 #   cd docker/testnet/mix_e2e && PHASE=2 bash orchestrate.sh
 #
-# It clones the three sibling repos (next to this one), builds the Linux libp2p
+# It clones the four sibling repos (next to this one), builds the Linux libp2p
 # .lgx, and builds the base image tagged `lp2p-mix-e2e` (logoscore + wallet/rln
-# modules + testnet fixtures — all fetched by the image build itself).
+# modules + the baked deployment profile — all fetched by the image build).
 #
 # Clones over SSH by default. The forks are public, so if you don't have SSH
 # keys set up, override with HTTPS:
@@ -37,6 +37,7 @@ echo "=== 1/3 clone sibling repos into $SIBLINGS ==="
 clone logos-libp2p-module             feat/enable-mix
 clone mix-rln-spam-protection-plugin  feat/cbind-rln
 clone nim-libp2p-mix                  feat/mix-cbind
+clone logos-rln-gifter                master
 
 echo "=== 2/3 build the Linux libp2p .lgx (~6-15 min) ==="
 LOGOS_ROOT="$SIBLINGS" bash "$REPO_ROOT/docker/build_lgx_linux.sh"

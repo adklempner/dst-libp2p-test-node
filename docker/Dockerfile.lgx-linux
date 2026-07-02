@@ -17,6 +17,7 @@ RUN nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc nixpkgs#pkg-config \
 COPY nim-libp2p-mix /src/nim-libp2p-mix
 COPY mix-rln-spam-protection-plugin /src/mix-rln-spam-protection-plugin
 COPY logos-libp2p-module /src/logos-libp2p-module
+COPY logos-rln-gifter /src/logos-rln-gifter
 
 # 3. Drop the Linux librln where cbind-rln.nix expects it.
 RUN mkdir -p /src/mix-rln-spam-protection-plugin/vendor && \
@@ -27,6 +28,7 @@ RUN mkdir -p /src/mix-rln-spam-protection-plugin/vendor && \
 RUN nix build "path:/src/logos-libp2p-module#lgx" \
       --override-input libp2p "path:/src/mix-rln-spam-protection-plugin" \
       --override-input libp2p/libp2p_mix "path:/src/nim-libp2p-mix" \
+      --override-input libp2p/logos_rln_gifter "path:/src/logos-rln-gifter" \
       --out-link /build/result-lgx && \
     cp -L /build/result-lgx/*.lgx /build/libp2p_module.lgx && \
     ls -la /build/libp2p_module.lgx

@@ -8,7 +8,8 @@
 #
 # Repos expected as siblings under ~/Waku/Logos:
 #   nim-libp2p-mix (feat/mix-cbind), mix-rln-spam-protection-plugin
-#   (feat/cbind-rln), logos-libp2p-module (feat/enable-mix).
+#   (feat/cbind-rln), logos-libp2p-module (feat/enable-mix), logos-rln-gifter
+#   (the standalone RLN membership gifter protocol module).
 set -euo pipefail
 
 LOGOS_ROOT="${LOGOS_ROOT:-$HOME/Waku/Logos}"
@@ -16,7 +17,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CTX=$(mktemp -d)
 OUT="${1:-$HERE/lp2p-out}"
 
-for r in nim-libp2p-mix mix-rln-spam-protection-plugin logos-libp2p-module; do
+for r in nim-libp2p-mix mix-rln-spam-protection-plugin logos-libp2p-module logos-rln-gifter; do
     rsync -a \
         --exclude='.git' --exclude='build' --exclude='nimcache*' \
         --exclude='result*' --exclude='*.dylib' --exclude='vendor/librln*.a' \

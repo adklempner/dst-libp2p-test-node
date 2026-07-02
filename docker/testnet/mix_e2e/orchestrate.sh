@@ -4,23 +4,26 @@
 #
 #   PHASE=1 : bring up 5 nodes, mesh the mix pool, sender one-way mixDial -> dest
 #             (RLN OFF) -> proves Sphinx routing through OUR module end to end.
-#   PHASE=2 : every node registers a DISTINCT RLN identity on testnet (per-hop
-#             mix RLN: each hop verifies the incoming proof AND regenerates one
-#             for the next hop, so every mix node must be a member). The sender
-#             dials; the proof is verified + regenerated at each of the 3 hops
-#             and delivered to the dest.
+#   PHASE=2 : every node obtains a DISTINCT RLN membership on testnet via a
+#             GIFTER (membership-allocation, LIP-158): relay1 is the gifter,
+#             the ONLY node holding the funded wallet. It self-allocates its own
+#             membership, then serves /logos/rln/membership/1.0.0; the other 4
+#             nodes authenticate with an EIP-191-signed request and receive a
+#             gifted on-chain registration — they never fund or sign a tx. Every
+#             mix node ends up a member (per-hop RLN: each hop verifies the
+#             incoming proof AND regenerates one for the next hop).
 #
-# Multi-identity registration: generate_identity is a pure function of a 32-byte
-# seed and register_member uses the holding account only as funder/signer, so ONE
-# funded payment account registers all 5 distinct identities (distinct seeds ->
-# distinct leaves). rlnRegister takes an optional "seed" to decouple the two.
-# Registrations run sequentially (each node re-syncs first) to avoid nonce races
-# on the shared payment account.
+# Gifted allocation: the client derives its own identity locally (only the
+# idCommitment is sent; the RLN secret never leaves the node). The gifter funds
+# and signs register_member with its own wallet and returns the leaf. Distinct
+# seeds -> distinct leaves. Registrations are serialized (each client's on-chain
+# confirmation barrier passes before the next requests) to avoid nonce races on
+# the single gifter wallet.
 #
-# Roles: sender + relay1/relay2/relay3 + dest. In PHASE 2 ALL are RLN members.
-# Setup order: rlnEnable MUST precede mixSetNodeInfo (factory read at mix mount).
-# Mesh keys host-derived (keys.py). Node addr = /ip4/<container-ip>/tcp/9000.
-# bash 3.2 (macOS): no associative arrays; per-node values via sv/gv.
+# Roles: relay1 (gifter+relay) + relay2/relay3 + dest + sender. In PHASE 2 ALL
+# are RLN members. Setup order: rlnEnable MUST precede mixSetNodeInfo (factory
+# read at mix mount). Mesh keys host-derived (keys.py). Node addr =
+# /ip4/<container-ip>/tcp/9000. bash 3.2 (macOS): no assoc arrays; via sv/gv.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,10 +31,14 @@ DC="docker compose -f $HERE/docker-compose.yml"
 KEYS="python3 $HERE/keys.py"
 LOGOSCORE=/logoscore/bin/logoscore
 PHASE="${PHASE:-1}"
-# NEG=1 (with PHASE=2): negative test — register relays+dest but leave the SENDER
-# UNREGISTERED (RLN enabled, mix mounted, no membership/proof). Its mixDial must
-# be rejected (no valid proof) and the message must NOT reach the dest, proving
-# RLN enforcement (vs the happy path where a registered sender's message lands).
+# Negative tests (with PHASE=2):
+#   NEG=1 : gift relays+dest but leave the SENDER UNREGISTERED (RLN enabled, mix
+#           mounted, no membership/proof; it never asks the gifter). Its mixDial
+#           must be rejected (no valid proof) and not reach the dest.
+#   NEG=2 : the sender DOES ask the gifter, but with a NON-allowlisted key. The
+#           gifter refuses (auth fails) -> sender stays unregistered -> rejected.
+#           This exercises the allocation authentication gate specifically.
+# Both prove RLN gates delivery (vs the happy path where a member's msg lands).
 NEG="${NEG:-0}"
 PROTO="${MSG_PROTO:-/ipfs/ping/1.0.0}"
 # Message exchange: src and dest do request/reply round-trips over the mix
@@ -51,6 +58,26 @@ RATE="${RATE:-100}"
 SYNC_STEP="${SYNC_STEP:-3000}"
 WALLET_MOD="logos_execution_zone"
 RLN_MOD="liblogos_rln_module"
+GIFTER_CODEC="/logos/rln/membership/1.0.0"
+
+# relay1 is the gifter (membership provider). The other 4 nodes authenticate to
+# it with a distinct EIP-191 key from the fixtures to receive a gifted on-chain
+# registration. Fixtures are sourced host-side (orchestrate runs on the host);
+# these keys never enter the image. relay1 needs no client key.
+GIFTER="relay1"
+FIX="$HERE/fixtures/gifter_auth"
+[ -f "$FIX/keys.env" ] && . "$FIX/keys.env"
+[ -f "$FIX/addresses.env" ] && . "$FIX/addresses.env"
+gifter_authkey(){ case "$1" in
+  relay2) printf '%s' "${KEY_MIX2:-}";;
+  relay3) printf '%s' "${KEY_MIX3:-}";;
+  dest)   printf '%s' "${KEY_RECEIVER:-}";;
+  sender) printf '%s' "${KEY_SENDER:-}";;
+  *) printf '';; esac; }
+# The gifter's allowlist = the 4 client addresses (JSON array for rlnGifterServe).
+GIFTER_ALLOWLIST="${ADDR_MIX2:-},${ADDR_MIX3:-},${ADDR_RECEIVER:-},${ADDR_SENDER:-}"
+# A key deliberately NOT on the allowlist, for the NEG=2 refusal test.
+NEG2_KEY="${KEY_RECEIVER2:-}"
 
 sv(){ eval "_${1}_${2}=\"\$3\""; }
 gv(){ eval "printf '%s' \"\${_${1}_${2}:-}\""; }
@@ -85,14 +112,21 @@ diagnose_reg(){ local svc="$1"; local logs
   echo "  !! RLN registration for '$svc' did not confirm on-chain." >&2
   if echo "$logs" | grep -qiE "Insufficient balance|may be out of funds|range end index 49"; then
     cat >&2 <<EOF
-  CAUSE: the shared payment account is OUT OF RLNTOK (each register costs
+  CAUSE: the deployment's payment account is OUT OF RLNTOK (each register costs
          price_per_unit*rate; the funded account holds a finite amount).
-  FIX: mint a fresh funded payment account by re-running setup, then re-run with
-       HOLDING_ACCT pointed at it (no image rebuild needed):
-    cd "$LEZ_RLN_DIR/lez-rln" && source ../testnet/env.sh && cargo run --bin run_setup
-    HOLDING_ACCT=\$(cat ~/.logos-lez-rln/payment_account_*.txt) PHASE=2 bash orchestrate.sh
+  FIX: provision a fresh funded payment account on the SAME tree (re-uses the
+       wallet, so run_setup mints a new funded holder), then rebuild the image
+       against the new deployment (the daemons sign with the baked wallet, so a
+       new payment account must be baked in):
+    D=docker/testnet/deployments/shared-5ade
+    (cd "\$LEZ_RLN_DIR/lez-rln" && PYO3_PYTHON=\$(command -v python3) \\
+        cargo build --release --bin run_setup --bin derive_accounts)
+    LEZ_RLN_DIR="\$LEZ_RLN_DIR" bash ../provision.sh --name shared-refunded \\
+        --tree \$(jq -r .tree_id "\$D/deployment.json") --adopt-wallet "\$D/storage.json"
+    docker build -f docker/Dockerfile.testnet-e2e \\
+        --build-arg DEPLOYMENT=shared-refunded -t lp2p-mix-e2e .
   If you instead saw "supply holding may be out of funds", the master supply is
-  exhausted -> do the full tree re-deploy (see "tree full" below / REPRODUCE.md).
+  exhausted -> provision a brand-new tree (see "tree full" below).
 EOF
   elif echo "$logs" | grep -qiE "Would exceed max total rate limit|max_total_rate_limit"; then
     cat >&2 <<EOF
@@ -120,6 +154,29 @@ EOF
 # freshly-funded payment account (from run_setup) to recover from out-of-funds
 # without rebuilding the image; CONFIG_ACCT to target a different tree.
 CONFIG_ACCT="${CONFIG_ACCT:-}"; HOLDING_ACCT="${HOLDING_ACCT:-}"
+
+# On-chain confirmation barrier + readiness gate for a membership (used by BOTH
+# the gifter's self-allocation and each gifted client). Waits until the rln
+# module reports registered:true for our idCommitment on the CANONICAL tree
+# BEFORE the caller proceeds, so the next membership lands on a DISTINCT leaf
+# (rlnIsReady alone was unreliable: get_merkle_proofs returns a proof for the
+# optimistic leaf before the tree advances, so leaves collided). Reads the ACTUAL
+# leaf and flags any mismatch with the optimistic one. Args: svc idc lopt pid.
+confirm_and_ready(){ local s="$1" idc="$2" lopt="$3" pid="$4" res lact="" conf=false rdy=False flag=""
+  for w in $(seq 1 80); do
+    res=$(call "$s" "$RLN_MOD" is_member_registered "$CONFIG_ACCT" "$idc")
+    eval "$(echo "$res" | python3 -c 'import json,sys
+try:
+  r=json.loads(json.load(sys.stdin)["result"]); print("conf=%s; lact=%s"%(str(r.get("registered",False)).lower(), r.get("leaf_index","")))
+except Exception: print("conf=false; lact=")')"
+    [ "$conf" = "true" ] && break
+    sleep 10
+  done
+  if [ "$conf" != "true" ]; then diagnose_reg "$s"; exit 1; fi
+  for w in $(seq 1 40); do rdy=$(call "$s" libp2p_module rlnIsReady | jval); [ "$rdy" = "True" ] && break; sleep 10; sync_wallet "$s" >/dev/null 2>&1; done
+  [ "$lopt" != "$lact" ] && flag=" !! LEAF MISMATCH (proof for $lopt, actual $lact)"
+  echo "  $s peerId=${pid:-EMPTY} leaf_opt=$lopt leaf_actual=$lact confirmed=$conf rlnIsReady=$rdy$flag"
+}
 
 echo "=== up: 5 daemons (force-recreate for FRESH daemons) ==="
 # Force-recreate so each run starts from clean daemons. Module state (e.g. the
@@ -163,16 +220,12 @@ except Exception: print("")')
   sv PEERID "$s" "$pid"
   sv LPPUB "$s" "$($KEYS peerpub "$pid" 2>/dev/null || echo DECODE_FAIL)"
 
-  if [ "$PHASE" = "2" ] && [ "$NEG" = "1" ] && [ "$s" = "sender" ]; then
-    # Negative test: leave the sender UNREGISTERED (no membership, no cached
-    # proof). rlnEnable + mix are already set up above; we just skip rlnRegister.
-    echo "  $s peerId=${pid:-EMPTY} UNREGISTERED (negative) rlnIsReady=$(call "$s" libp2p_module rlnIsReady | jval)"
-  elif [ "$PHASE" = "2" ]; then
-    # Distinct identity seed per node; ONE funded account (HOLDING_ACCT) signs.
-    # Retry transient failures (METHOD_FAILED / sequencer hiccup on a shared
-    # testnet); rlnRegister is idempotent on the same seed (a confirmed
-    # commitment returns its existing leaf), so retrying is safe. A persistent
-    # failure (out of funds / tree full) is then diagnosed.
+  if [ "$PHASE" = "2" ] && [ "$s" = "$GIFTER" ]; then
+    # relay1 = the membership provider (gifter). It holds the funded wallet, so
+    # it self-allocates its OWN membership (register_member funded/signed by its
+    # wallet), confirms on-chain, then mounts the gifter service the other nodes
+    # authenticate to. Retry transient sequencer failures; register_member is
+    # idempotent on the same seed. A persistent failure is diagnosed.
     seed=$(python3 -c 'import os;print(os.urandom(32).hex())')
     idc=""; lopt=""; reg=""
     for attempt in 1 2 3 4; do
@@ -185,31 +238,46 @@ except Exception: print("lopt=ERR; idc=")')"
       echo "  $s rlnRegister attempt $attempt failed ($reg) — re-sync + retry in ${REG_RETRY_SLEEP:-15}s" >&2
       sync_wallet "$s" >/dev/null 2>&1; sleep "${REG_RETRY_SLEEP:-15}"
     done
-    # Still no idCommitment after retries -> diagnose (funds/tree/etc.) and stop.
     if [ -z "$idc" ]; then echo "  rlnRegister response: $reg" >&2; diagnose_reg "$s"; exit 1; fi
-    # BARRIER: wait until THIS registration is CONFIRMED on-chain (the rln module
-    # reports registered:true for our idCommitment) BEFORE the next node
-    # registers. is_member_registered reads the canonical tree, so once true the
-    # tree has truly grown -> the next node gets a DISTINCT leaf (the rlnIsReady
-    # barrier was unreliable: get_merkle_proofs returns a proof for the optimistic
-    # leaf before the tree advances, so leaves collided). We also read the ACTUAL
-    # leaf and flag any mismatch with the optimistic one.
-    lact=""; conf=false
-    for w in $(seq 1 80); do
-      res=$(call "$s" "$RLN_MOD" is_member_registered "$CONFIG_ACCT" "$idc")
-      eval "$(echo "$res" | python3 -c 'import json,sys
+    confirm_and_ready "$s" "$idc" "$lopt" "$pid"
+    # Mount the gifter service (allowlist auth). Clients dial this codec directly
+    # (by peerId+multiaddr, pre-mesh) to obtain a gifted membership.
+    al=$(python3 -c 'import json,sys; print(json.dumps([a for a in sys.argv[1].split(",") if a]))' "$GIFTER_ALLOWLIST")
+    jcall "$s" libp2p_module rlnGifterServe "{\"config\":\"$CONFIG_ACCT\",\"wallet\":\"$HOLDING_ACCT\",\"allowlist\":$al}" >/dev/null 2>&1
+    echo "  $s gifter service mounted ($GIFTER_CODEC, allowlist=4 clients)"
+  elif [ "$PHASE" = "2" ] && [ "$NEG" = "1" ] && [ "$s" = "sender" ]; then
+    # NEG=1: leave the sender UNREGISTERED (never asks the gifter). rlnEnable +
+    # mix are set up above; we just skip the allocation request.
+    echo "  $s peerId=${pid:-EMPTY} UNREGISTERED (negative) rlnIsReady=$(call "$s" libp2p_module rlnIsReady | jval)"
+  elif [ "$PHASE" = "2" ] && [ "$NEG" = "2" ] && [ "$s" = "sender" ]; then
+    # NEG=2: sender asks the gifter with a NON-allowlisted key -> auth refused ->
+    # no membership. Exercises the allocation authentication gate specifically.
+    seed=$(python3 -c 'import os;print(os.urandom(32).hex())')
+    req=$(jcall "$s" libp2p_module rlnGifterRequest "{\"gifterPeerId\":\"$(gv PEERID "$GIFTER")\",\"gifterMultiaddr\":\"$(gv MADDR "$GIFTER")\",\"config\":\"$CONFIG_ACCT\",\"seed\":\"$seed\",\"authKey\":\"$NEG2_KEY\",\"rate\":$RATE}")
+    echo "  $s peerId=${pid:-EMPTY} REFUSED (negative, non-allowlisted key) rlnIsReady=$(call "$s" libp2p_module rlnIsReady | jval)"
+  elif [ "$PHASE" = "2" ]; then
+    # Gifter client: authenticate (EIP-191 over our idCommitment) and request an
+    # allocation from relay1. We derive our identity locally — only the
+    # idCommitment is sent; the RLN secret never leaves this node. The gifter
+    # funds + signs the tx and returns the leaf; then we run the same on-chain
+    # confirmation barrier. Re-sync the GIFTER's wallet first so its next tx uses
+    # the freshest nonce (the previous client's registration is already sealed).
+    sync_wallet "$GIFTER" >/dev/null 2>&1
+    ak=$(gifter_authkey "$s")
+    seed=$(python3 -c 'import os;print(os.urandom(32).hex())')
+    idc=""; lopt=""; req=""
+    for attempt in 1 2 3 4; do
+      req=$(jcall "$s" libp2p_module rlnGifterRequest "{\"gifterPeerId\":\"$(gv PEERID "$GIFTER")\",\"gifterMultiaddr\":\"$(gv MADDR "$GIFTER")\",\"config\":\"$CONFIG_ACCT\",\"seed\":\"$seed\",\"authKey\":\"$ak\",\"rate\":$RATE}")
+      eval "$(echo "$req" | python3 -c 'import json,sys
 try:
-  r=json.loads(json.load(sys.stdin)["result"]); print("conf=%s; lact=%s"%(str(r.get("registered",False)).lower(), r.get("leaf_index","")))
-except Exception: print("conf=false; lact=")')"
-      [ "$conf" = "true" ] && break
-      sleep 10
+  v=json.load(sys.stdin)["result"]["value"]; print("lopt=%s; idc=%s"%(v["leaf_index"],v["id_commitment"]))
+except Exception: print("lopt=ERR; idc=")')"
+      [ -n "$idc" ] && break
+      echo "  $s rlnGifterRequest attempt $attempt failed ($req) — re-sync gifter + retry in ${REG_RETRY_SLEEP:-15}s" >&2
+      sync_wallet "$GIFTER" >/dev/null 2>&1; sleep "${REG_RETRY_SLEEP:-15}"
     done
-    # Not confirmed within the window -> the Register tx never landed (out of
-    # funds, tree full, or sequencer issue). Diagnose and stop.
-    if [ "$conf" != "true" ]; then diagnose_reg "$s"; exit 1; fi
-    rdy=False; for w in $(seq 1 40); do rdy=$(call "$s" libp2p_module rlnIsReady | jval); [ "$rdy" = "True" ] && break; sleep 10; sync_wallet "$s" >/dev/null 2>&1; done
-    flag=""; [ "$lopt" != "$lact" ] && flag=" !! LEAF MISMATCH (proof for $lopt, actual $lact)"
-    echo "  $s peerId=${pid:-EMPTY} leaf_opt=$lopt leaf_actual=$lact confirmed=$conf rlnIsReady=$rdy$flag"
+    if [ -z "$idc" ]; then echo "  rlnGifterRequest response: $req" >&2; diagnose_reg "$GIFTER"; exit 1; fi
+    confirm_and_ready "$s" "$idc" "$lopt" "$pid"
   else
     echo "  $s peerId=${pid:-EMPTY} mixpub=$(gv MIXPUB "$s" | cut -c1-12).. lppub=$(gv LPPUB "$s" | cut -c1-12).."
   fi
@@ -261,8 +329,8 @@ run_dir(){ local from="$1" to="$2" ok=0 i
 
 echo "=== exchange: $MSG_COUNT request/reply round-trip(s) per initiator (BIDIR=$BIDIR) ==="
 run_dir sender dest; SD=$LAST_OK; DS=0
-# In NEG mode only the (unregistered) sender->dest direction is the test.
-if [ "$BIDIR" = "1" ] && [ "$NEG" != "1" ]; then run_dir dest sender; DS=$LAST_OK; fi
+# In NEG mode only the (unregistered/refused) sender->dest direction is the test.
+if [ "$BIDIR" = "1" ] && [ "$NEG" = "0" ]; then run_dir dest sender; DS=$LAST_OK; fi
 sleep 4
 
 echo "=== observe: RLN proofs (forward request + SURB reply legs) ==="
@@ -274,11 +342,16 @@ for n in $ALL; do
 done
 sgen=$($DC logs --since 240s sender 2>&1 | grep -c 'Generated RLN proof successfully')
 echo "  replies: sender->dest=$SD dest->sender=$DS ; total verifications=$vtot ; sender proofs=$sgen"
+if [ "$PHASE" = "2" ]; then
+  # Gifted allocations succeeded at the gifter (relay1): one log line per client.
+  greg=$($DC logs --since 1800s "$GIFTER" 2>&1 | grep -c 'RLN gifter registration succeeded')
+  echo "  gifter($GIFTER): 'RLN gifter registration succeeded' x$greg (expect 4 in the happy path)"
+fi
 
 echo "=== VERDICT ==="
-if [ "$PHASE" = "2" ] && [ "$NEG" = "1" ]; then
+if [ "$PHASE" = "2" ] && [ "$NEG" != "0" ]; then
   if [ "$SD" = "0" ] && [ "$sgen" = "0" ]; then
-    echo "  PASS (negative): unregistered sender got 0 replies and generated 0 proofs -> rejected."
+    echo "  PASS (negative): sender got 0 replies and generated 0 proofs -> rejected (NEG=$NEG)."
   else
     echo "  FAIL (negative): expected 0 replies / 0 sender proofs, got replies=$SD sgen=$sgen"
   fi

@@ -1,15 +1,17 @@
 # 5-node RLN-over-mix E2E on the new universal logos-libp2p-module stack.
 # One logoscore daemon per container on a shared bridge network (each on
 # 0.0.0.0:9000, mutually reachable). Roles are driven post-up by orchestrate.sh:
-#   sender  -> wallet + rln + libp2p_module, registers RLN, generates proof, dials
-#   relay1-3, dest -> libp2p_module only, rlnEnable + mixSetNodeInfo (verify hops)
-# All services share one image (lp2p-testnet-e2e) + the freshly built .lgx,
-# mounted read-only and installed by entrypoint.sh.
+#   relay1 -> gifter: holds the funded wallet, self-allocates its membership, then
+#             serves /logos/rln/membership/1.0.0 to gift the other nodes.
+#   relay2/3, dest, sender -> gifter clients: authenticate (EIP-191) and receive a
+#             gifted on-chain membership; they never fund/sign a tx. All 5 end up
+#             RLN members (per-hop mix RLN: verify + regenerate at each hop).
+# All services share one image (lp2p-mix-e2e) + the freshly built .lgx, mounted
+# read-only and installed by entrypoint.sh.
 x-node: &node
-  # lp2p-mix-e2e is a snapshot (docker commit) of the working single-node `tn`
-  # container: it has flat, loadable wallet+rln modules plus their ffi nix-store
-  # deps (the raw lp2p-testnet-e2e image ships them broken — missing the absolute
-  # nix path in the wallet/rln .so NEEDED entry). The entrypoint overlays the
+  # lp2p-mix-e2e is built by docker/Dockerfile.testnet-e2e (bootstrap.sh step 3):
+  # logoscore + flat, loadable wallet+rln .lgx bundles (with their ffi nix-store
+  # deps) + the baked deployment profile at /testnet. The entrypoint overlays the
   # freshly built libp2p_module .lgx (the one with LIBP2P_LISTEN_ADDRS support).
   image: lp2p-mix-e2e
   environment:
